@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Brew Haven Admin</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<main class="admin-page">
+<h1>Brew Haven Admin</h1>
+<form id="product-form">
+<input name="name" placeholder="Product name" required>
+<input name="description" placeholder="Description" required>
+<input name="image_url" placeholder="Image URL" required>
+<input name="price" type="number" min="0" placeholder="Price" required>
+<button type="submit">Add product</button>
+</form>
+<section>
+<h2>Products</h2>
+<div id="products"></div>
+</section>
+<section>
+<h2>Orders</h2>
+<div id="orders"></div>
+</section>
+</main>
+<script type="module">
+import { supabase } from "./supabase-client.js";
+const productForm = document.querySelector("#product-form");
+const products = document.querySelector("#products");
+const orders = document.querySelector("#orders");
+const load = async () => {
+  const [{ data: productRows }, { data: orderRows }] = await Promise.all([
+    supabase.from("products").select("id,name,description,image_url,price,is_available").order("created_at", { ascending: false }),
+    supabase.from("orders").select("id,customer_name,total,status,created_at").order("created_at", { ascending: false })
+  ]);
+  products.replaceChildren(...(productRows || []).map((product) => {
+    const row = document.createElement("div");
+    row.innerHTML = `<strong>${product.name}</strong><span>${product.price}</span><button data-id="${product.id}">${product.is_available ? "Hide" : "Show"}</button>`;
+    row.querySelector("button").onclick = async () => { await supabase.from("products").update({ is_available: !product.is_available }).eq("id", product.id); load(); };
+    return row;
+  }));
+  orders.replaceChildren(...(orderRows || []).map((order) => {
+    const row = document.createElement("div");
+    row.innerHTML = `<strong>${order.customer_name}</strong><span>${order.total}</span><select><option ${order.status === "new" ? "selected" : ""}>new</option><option ${order.status === "preparing" ? "selected" : ""}>preparing</option><option ${order.status === "ready" ? "selected" : ""}>ready</option><option ${order.status === "completed" ? "selected" : ""}>completed</option><option ${order.status === "cancelled" ? "selected" : ""}>cancelled</option></select>`;
+    row.querySelector("select").onchange = async (event) => { await supabase.from("orders").update({ status: event.target.value }).eq("id", order.id); };
+    return row;
+  }));
+};
+productForm.onsubmit = async (event) => { event.preventDefault(); const form = new FormData(productForm); await supabase.from("products").insert({ name: form.get("name"), description: form.get("description"), image_url: form.get("image_url"), price: Number(form.get("price")) }); productForm.reset(); load(); };
+load();
+</script>
+</body>
+</html>
